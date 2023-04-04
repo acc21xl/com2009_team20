@@ -6,6 +6,7 @@ from nav_msgs.msg import Odometry
 # additionally, import the "euler_from_quaternion" function from the tf library
 # for converting the raw orientation values from the odometry message into euler angles:
 from tf.transformations import euler_from_quaternion
+import math
 
 class OdomSubscriber():
 
@@ -34,7 +35,8 @@ class OdomSubscriber():
         # Here we print out the values that we're interested in:
         if self.counter > 10:
             self.counter = 0
-            print(f"({roll},{pitch},{yaw})")
+            degrees = (yaw * 180)/math.pi
+            print(f"x = {pos_x:.3f} (m), y = {pos_y:.3f} (m), theta_z = {degrees:.2f} (degrees)")
         else:
             self.counter += 1
 

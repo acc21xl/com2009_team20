@@ -19,32 +19,35 @@ class Publisher():
 
         rospy.loginfo(f"The '{self.node_name}' node is active...") 
 
+        self.counter = 0
+
+
     def shutdownhook(self): 
         print(f"Stopping the '{self.node_name}' node at: {rospy.get_time()}")
         self.ctrl_c = True
               
 
-    def main_loop(self,start_time):
-        while not self.ctrl_c:
+    def main_loop(self):
+        #init_time = rospy.get_rostime().secs
+        start_time = rospy.get_rostime()
+        #anti-clockwise circle
+        vel = Twist()
+        move_time = (2 * math.pi) / 0.23
+        if (rospy.get_rostime().secs - start_time.secs) <= (move_time):
+            vel.linear.x = 0.115 # m/s
+            vel.angular.z = 0.23 # rad/s
+            self.pub.publish(vel)
             
-            #anti-clockwise circle
-            vel = Twist()
-            move_time = (2 * math.pi) / 0.23
-            if (rospy.get_rostime().secs - start_time) <= (move_time):
-                vel.linear.x = 0.115 # m/s
-                vel.angular.z = 0.23 # rad/s
-                self.pub.publish(vel)
+        elif move_time < (rospy.get_rostime().secs - start_time.secs) <= (2 * move_time):
+            vel.linear.x = 0.115
+            vel.angular.z = -0.23
+            self.pub.publish(vel)
             
-            elif move_time < (rospy.get_rostime().secs - start_time) < (2 * move_time):
-                vel.linear.x = 0.115
-                vel.angular.z = -0.23
-                self.pub.publish(vel)
+        else:
+            vel.linear.x = 0.0
+            vel.angular.z = 0.0
+            self.pub.publish(vel)
             
-            else:
-                vel.linear.x = 0.0
-                vel.angular.z = 0.0
-                self.pub.publish(vel)
-                break
             #while (rospy.get_rostime().secs - StartTime.secs) < move_time: 
             #    continue
 
@@ -68,8 +71,8 @@ class Publisher():
     
 if __name__ == '__main__': 
     publisher_instance = Publisher()
-    start_time = rospy.get_rostime().secs
+    #start_time = rospy.get_rostime().secs
     try:
-        publisher_instance.main_loop(start_time) 
+        publisher_instance.main_loop() 
     except rospy.ROSInterruptException:
         pass
