@@ -9,16 +9,18 @@ from tf.transformations import euler_from_quaternion
 
 class Task1:
     def __init__(self):
-        self.prev_x = None
-        self.prev_y = None
-        self.distance_covered = 0.0
+        self.initial_x = None
+        self.initial_y = None
+        self.total_distance = 0.0
         self.counter = 0
 
         rospy.init_node('task1', anonymous=True)
-        rospy.Subscriber('/odom', Odometry, self.odometry_callback)
+        rospy.Subscriber('/odom', Odometry, self.callback_function)
         self.pub = rospy.Publisher("cmd_vel", Twist, queue_size=10)
         self.vel = Twist()
         self.ctrl_c = False
+        self.rate = rospy.Rate(10)  # hz
+
         rospy.on_shutdown(self.shutdownhook)
 
 
@@ -29,39 +31,38 @@ class Task1:
         self.ctrl_c = True
 
 
-    def odometry_callback(self, odom):
-        curr_x = odom.pose.pose.position.x
-        curr_y = odom.pose.pose.position.y
-        curr_z = odom.pose.pose.position.z
+    def callback_function(self, odom):
+        ongoing_x = odom.pose.pose.position.x
+        ongoing_y = odom.pose.pose.position.y
+        ongoing_z = odom.pose.pose.position.z
 
         pose = odom.pose.pose
         orientation = pose.orientation 
 
-        (roll, pitch, yaw) = euler_from_quaternion([curr_x, 
-                     curr_y, curr_z, orientation.w], 
+        (roll, pitch, yaw) = euler_from_quaternion([ongoing_x, 
+                     ongoing_y, ongoing_z, orientation.w], 
                      'sxyz')
 
         if self.counter > 10:
             self.counter = 0
             degrees = (yaw * 180)/math.pi
-            print(f"x = {curr_x:.3f} (m), y = {curr_y:.3f} (m), theta_z = {degrees:.2f} (degrees)")
+            print(f"x = {ongoing_x:.3f} (m), y = {ongoing_y:.3f} (m), theta_z = {degrees:.2f} (degrees)")
         else:
             self.counter += 1
 
-        #if self.prev_x is not None and self.prev_y is not None:
-        #    distance = math.sqrt((curr_x - self.prev_x)**2 + (curr_y - self.prev_y)**2)
-        #    self.distance_covered += distance
+        if self.initial_x is not None and self.initial_y is not None:
+            distance = math.sqrt((ongoing_x - self.initial_x)**2 + (ongoing_y - self.initial_y)**2)
+            self.total_distance += distance
 
-        #self.prev_x = curr_x
-        #self.prev_y = curr_y
+        self.initial_x = ongoing_x
+        self.initial_y = ongoing_y
 
     def main_loop(self):
-        rate = rospy.Rate(10)  # 10 Hz
         while not self.ctrl_c:
-            if self.distance_covered <= (2 * math.pi * 0.5):
+            if self.total_distance <= (2 * math.pi * 0.5):
                 self.vel.linear.x = 0.115
                 self.vel.angular.z = 0.23
-            elif self.distance_covered <= 2 * (2 * math.pi * 0.5):
+            elif self.total_distance <= 2 * (2 * math.pi * 0.5):
                 self.vel.linear.x = 0.115
                 self.vel.angular.z = -0.23
 
@@ -72,7 +73,7 @@ class Task1:
 
             self.pub.publish(self.vel)
 
-            rate.sleep()
+            self.rate.sleep()
     
 
 if __name__ == "__main__":
