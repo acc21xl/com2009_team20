@@ -13,8 +13,8 @@ class Task1:
         self.y_init = None
         self.yaw_init = None
         self.total_distance = 0.0
-        self.counter = 10
-        self.print_counter = 0 
+        #starts at 31 so it can print out the data before it starts moving
+        self.counter = 31
 
         rospy.init_node('task1', anonymous=True)
         rospy.Subscriber('/odom', Odometry, self.callback_function)
@@ -50,16 +50,12 @@ class Task1:
                      orientation.y, orientation.z, orientation.w], 
                      'sxyz')
         
-        if self.counter > 26:
+        if self.counter > 30:
             self.counter = 0
             one_loop = 360
             half_loop = one_loop/2
             degrees = (math.degrees(yaw-self.yaw_init)+ half_loop) % one_loop - half_loop
-            self.print_counter += 1
-            print(self.print_counter)
             print(f"x = {ongoing_x:.3f} (m), y = {ongoing_y:.3f} (m), theta_z = {degrees:.1f} (degrees)")
-        else:
-            self.counter += 1
 
         if self.x_init is not None and self.y_init is not None:
             distance = math.sqrt((ongoing_x - self.x_init)**2 + (ongoing_y - self.y_init)**2)
