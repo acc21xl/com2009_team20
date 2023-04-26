@@ -9,11 +9,12 @@ from tf.transformations import euler_from_quaternion
 
 class Task1:
     def __init__(self):
-        self.initial_x = None
-        self.initial_y = None
-        self.initial_yaw = None
+        self.x_init = None
+        self.y_init = None
+        self.yaw_init = None
         self.total_distance = 0.0
         self.counter = 10
+        self.print_counter = 0 
 
         rospy.init_node('task1', anonymous=True)
         rospy.Subscriber('/odom', Odometry, self.callback_function)
@@ -31,37 +32,41 @@ class Task1:
         self.pub.publish(Twist())
         self.ctrl_c = True
 
-
+    
     def callback_function(self, odom):
         ongoing_x = odom.pose.pose.position.x
         ongoing_y = odom.pose.pose.position.y
         pose = odom.pose.pose
         orientation = pose.orientation 
 
-        if self.initial_yaw is None:
+        if self.yaw_init is None:
             orientation = pose.orientation 
-            (roll, pitch, yaw) = euler_from_quaternion([orientation.x, 
+            (roll, pitch, yaw_init) = euler_from_quaternion([orientation.x, 
                      orientation.y, orientation.z, orientation.w], 
                      'sxyz')
-            self.initial_yaw = yaw
+            self.yaw_init = yaw_init
 
         (roll, pitch, yaw) = euler_from_quaternion([orientation.x, 
                      orientation.y, orientation.z, orientation.w], 
                      'sxyz')
-
-        if self.counter > 10:
+        
+        if self.counter > 26:
             self.counter = 0
-            degrees = (math.degrees(yaw-self.initial_yaw)+180) % 360 - 180
+            one_loop = 360
+            half_loop = one_loop/2
+            degrees = (math.degrees(yaw-self.yaw_init)+ half_loop) % one_loop - half_loop
+            self.print_counter += 1
+            print(self.print_counter)
             print(f"x = {ongoing_x:.3f} (m), y = {ongoing_y:.3f} (m), theta_z = {degrees:.1f} (degrees)")
         else:
             self.counter += 1
 
-        if self.initial_x is not None and self.initial_y is not None:
-            distance = math.sqrt((ongoing_x - self.initial_x)**2 + (ongoing_y - self.initial_y)**2)
+        if self.x_init is not None and self.y_init is not None:
+            distance = math.sqrt((ongoing_x - self.x_init)**2 + (ongoing_y - self.y_init)**2)
             self.total_distance += distance
 
-        self.initial_x = ongoing_x
-        self.initial_y = ongoing_y
+        self.x_init = ongoing_x
+        self.y_init = ongoing_y
 
     def main_loop(self):
         
@@ -76,12 +81,13 @@ class Task1:
             else:
                 self.vel.linear.x = 0.0
                 self.vel.angular.z = 0.0
+                print("done")
+                self.shutdownhook()
 
 
             self.pub.publish(self.vel)
-
             self.rate.sleep()
-    
+
 
 if __name__ == "__main__":
     node = Task1()
