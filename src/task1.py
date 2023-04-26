@@ -83,7 +83,7 @@ class Task1:
             self.rate.sleep()
     
 
-if _name_ == "_main_":
+if __name__ == "_main_":
     node = Task1()
     try:
         node.main_loop()
