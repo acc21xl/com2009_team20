@@ -8,7 +8,7 @@ from tf.transformations import euler_from_quaternion
 
 
 class Task1:
-    def _init_(self):
+    def __init__(self):
         self.initial_x = None
         self.initial_y = None
         self.initial_yaw = None
@@ -83,7 +83,7 @@ class Task1:
             self.rate.sleep()
     
 
-if __name__ == "_main_":
+if __name__ == "__main__":
     node = Task1()
     try:
         node.main_loop()
