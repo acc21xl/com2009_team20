@@ -57,7 +57,7 @@ class Task1:
             self.counter += 1
 
         if self.initial_x is not None and self.initial_y is not None:
-            distance = math.sqrt((ongoing_x - self.initial_x)*2 + (ongoing_y - self.initial_y)*2)
+            distance = math.sqrt((ongoing_x - self.initial_x)**2 + (ongoing_y - self.initial_y)**2)
             self.total_distance += distance
 
         self.initial_x = ongoing_x
