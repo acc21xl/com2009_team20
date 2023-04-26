@@ -8,7 +8,7 @@ from tf.transformations import euler_from_quaternion
 
 
 class Task1:
-    def __init__(self):
+    def _init_(self):
         self.initial_x = None
         self.initial_y = None
         self.initial_yaw = None
@@ -57,7 +57,7 @@ class Task1:
             self.counter += 1
 
         if self.initial_x is not None and self.initial_y is not None:
-            distance = math.sqrt((ongoing_x - self.initial_x)**2 + (ongoing_y - self.initial_y)**2)
+            distance = math.sqrt((ongoing_x - self.initial_x)*2 + (ongoing_y - self.initial_y)*2)
             self.total_distance += distance
 
         self.initial_x = ongoing_x
@@ -83,7 +83,7 @@ class Task1:
             self.rate.sleep()
     
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     node = Task1()
     try:
         node.main_loop()
