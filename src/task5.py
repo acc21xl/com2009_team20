@@ -4,6 +4,7 @@ from turtle import right
 import rospy
 import numpy as np
 import math
+import roslaunch
 
 # For creating images
 import cv2
@@ -197,6 +198,17 @@ class Task5:
                 self.vel.linear.x = 0.15
             self.pub.publish(self.vel)
             rate.sleep()
+        
+            map_path = "~/catkin_ws/src/com2009_team20/maps/task5_map"
+
+            launch = roslaunch.scriptapi.ROSLaunch()
+            launch.start()
+
+            print(f"Saving map at time: {rospy.get_time()}...")
+            node = roslaunch.core.Node(package="map_server",
+                                    node_type="map_saver",
+                                    args=f"-f {map_path}")
+            process = launch.launch(node)
 
 if __name__ == "__main__":
     node = Task5()

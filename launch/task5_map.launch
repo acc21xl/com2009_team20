@@ -2,7 +2,7 @@
 https://github.com/ROBOTIS-GIT/turtlebot3/blob/master/turtlebot3_navigation/launch/turtlebot3_navigation.launch
 -->
 <launch>
-  <include file="$(find tuos_ros_simulations)/launch/explorations.launch" />
+  <include file="$(find com2009_team20)/com2009_simulations/launch/exploration.launch" />
 
   <!-- To be modified -->
   <arg name="task5_map" default=" $(find com2009_team20)/maps/task5_map.yaml"/>
