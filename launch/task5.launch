@@ -2,8 +2,6 @@
   <arg name="colour" default="Black" />
   <node pkg="com2009_team20" type="task5.py" name="task5" output="screen" args="colour $(arg colour)"/>
 
-  <include file="$(find com2009_team20)/com2009_simulations/launch/exploration.launch" />
-
   <!-- To be modified -->
   <arg name="task5_map" default=" $(find com2009_team20)/maps/task5_map.yaml"/>
   <arg name="initial_pose_x" default="0.5"/>
@@ -14,8 +12,8 @@
   <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
   <arg name="move_forward_only" default="false"/>
 
-  <!-- Turtlebot3 Bringup -->
-  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_remote.launch">
+    <!-- Turtlebot3 SLAM -->
+  <include file="$(find turtlebot3_slam)/launch/turtlebot3_slam.launch">
     <arg name="model" value="$(arg model)" />
   </include>
 
@@ -35,7 +33,4 @@
     <arg name="move_forward_only" value="$(arg move_forward_only)"/>
   </include>
 
-  <!-- rviz -->
-  <node pkg="rviz" type="rviz" name="rviz" required="true"
-    args="-d $(find turtlebot3_navigation)/rviz/turtlebot3_navigation.rviz"/>
 </launch>

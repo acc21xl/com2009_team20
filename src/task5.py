@@ -4,6 +4,7 @@ from turtle import right
 import rospy
 import numpy as np
 import math
+from pathlib import Path 
 import roslaunch
 
 # For creating images
@@ -21,14 +22,16 @@ from sensor_msgs.msg import LaserScan
 class Task5:
     def __init__(self):
         self.node_name ="task5"
-
+        self.map_path = "/home/student/catkin_ws/src/com2009_team20/maps/task5_map"
         # How node takes arguments for which colour to look for
         cli = argparse.ArgumentParser(description=f"Command-line interface for the '{self.node_name}' node.")
         cli.add_argument("colour", metavar="COL", default="Black",help="The name of a colour(Blue/Red/Yellow?Green)"
         )
 
-        args, self.colour_arg = cli.parse_known_args(rospy.myargv()[1:])
+        #self.launch = roslaunch.scriptapi.ROSLaunch()
+        #self.launch.start()
 
+        args, self.colour_arg = cli.parse_known_args(rospy.myargv()[1:])
         rospy.init_node('task5',anonymous=True)
 
         # Subscriber node for taking picture of beacon
@@ -44,14 +47,38 @@ class Task5:
         self.pub = rospy.Publisher("cmd_vel", Twist, queue_size=10)
         self.vel = Twist()
 
+        # Default values set incase colour_arg isn't right 
+        # (Hue, Sat, Val)
+        self.lower_hsv = (0,0,100)
+        self.upper_hsv = (175,255,255)
+        rospy.on_shutdown(self.shutdownhook)
+
+        #These work for simulation need to check on real robots
+        if self.colour_arg[0] == "blue":
+            self.lower_hsv = (115, 50, 100)
+            self.upper_hsv = (160, 255, 255)
+        elif self.colour_arg[0] == "red":
+            self.lower_hsv = (0, 50, 100)
+            self.upper_hsv = (10, 255, 255)
+        elif self.colour_arg[0] == "yellow":
+            self.lower_hsv = (25,50,100)
+            self.upper_hsv = (40,255,255)
+        elif self.colour_arg[0] == "green":
+            self.lower_hsv = (50, 70, 100)
+            self.upper_hsv = (70, 255, 255)
+        else:
+            print("Invalid Colour Choice")
+        print(f"TASK 5 BEACON: The target is {self.colour_arg[0]}")
+
         # Initialises class variables
         self.turn = "No"
         self.ctrl_c = False
         self.counter = 0
         self.m00 = 0
         self.m00_min = 10000
-
-        rospy.on_shutdown(self.shutdownhook)
+        self.base_image_path = Path.home().joinpath("/home/student/catkin_ws/src/com2009_team20/snaps/")
+        self.base_image_path.mkdir(parents=True, exist_ok=True) 
+        self.pic_taken = False
 
     def shutdownhook(self):
         self.pub.publish(Twist())
@@ -60,11 +87,11 @@ class Task5:
 
     def camera_callback(self, img_data):
         try:
-            cv_img = self.cvbridge_interface.imgmsg_to_cv2(img_data, desired_encoding="bgr8")
+            self.cv_img = self.cvbridge_interface.imgmsg_to_cv2(img_data, desired_encoding="bgr8")
         except CvBridgeError as e:
             print(e)
         
-        height, width, _ = cv_img.shape
+        height, width, _ = self.cv_img.shape
         crop_width = width - 800
         # Set to 100 so it doesn't detect pillars over walls or
         # colours on the floor
@@ -72,31 +99,10 @@ class Task5:
         crop_x = int((width/2) - (crop_width/2))
         crop_y = int((height/2) - (crop_height/2))
 
-        crop_img = cv_img[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
+        crop_img = self.cv_img[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
         hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
 
-        # Default values set incase colour_arg isn't right 
-        # (Hue, Sat, Val)
-        lower_hsv = (0,0,100)
-        upper_hsv = (175,255,255)
-
-        #These work for simulation need to check on real robots
-        if self.colour_arg == "Blue":
-            lower_hsv = (115, 50, 100)
-            upper_hsv = (160, 255, 255)
-        elif self.colour_arg == "Red":
-            lower_hsv = (0, 50, 100)
-            upper_hsv = (10, 255, 255)
-        elif self.colour_arg == "Yellow":
-            lower_hsv = (25,50,100)
-            upper_hsv = (40,255,255)
-        elif self.colour_arg == "Green":
-            lower_hsv = (50, 70, 100)
-            upper_hsv = (70, 255, 255)
-        else:
-            print("invalid colour given")
-
-        mask = cv2.inRange(hsv_img,lower_hsv, upper_hsv)
+        mask = cv2.inRange(hsv_img,self.lower_hsv, self.upper_hsv)
         res = cv2.bitwise_and(crop_img, crop_img, mask = mask)
 
         m = cv2.moments(mask)
@@ -106,7 +112,7 @@ class Task5:
         if self.m00 > self.m00_min:
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
         
-        cv2.imshow('cropped image', crop_img)
+        #cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
 
     def scan_callback(self,scan_data):
@@ -136,7 +142,11 @@ class Task5:
         #   Follow normal movement rules, avoiding walls etc
         #   
         if self.m00 > self.m00_min:
-            print("Blob Detected")
+            if (self.pic_taken == False):
+                print(self.pic_taken)
+                self.pic_taken = True
+                show_and_save_image(self.cv_img, self.base_image_path)
+                #move so entire width in (at least 1/3 of screen) with space on either side
 
         # Going to hit front wall
         if (self.minD_front < 0.25):
@@ -179,9 +189,15 @@ class Task5:
             self.counter += 1
 
     def main_loop(self):
-        print(self.colour_arg)
         rate = rospy.Rate(40)
         while not self.ctrl_c:
+            #new counter (maybe time based)
+            if self.counter > 50:
+                print(f"Saving map at time: {rospy.get_time()}...")
+                node = roslaunch.core.Node(package="map_server",
+                           node_type="map_saver",
+                           args=f"-f {self.map_path}")
+                self.launch.launch(node)
             self.vel.linear.x = 0.13
             
             if self.turn == "noCrash":
@@ -198,17 +214,19 @@ class Task5:
                 self.vel.linear.x = 0.15
             self.pub.publish(self.vel)
             rate.sleep()
-        
-            map_path = "~/catkin_ws/src/com2009_team20/maps/task5_map"
 
-            launch = roslaunch.scriptapi.ROSLaunch()
-            launch.start()
+def show_and_save_image(img, base_image_path): 
+    full_image_path = base_image_path.joinpath("/the_beacon.jpg")
 
-            print(f"Saving map at time: {rospy.get_time()}...")
-            node = roslaunch.core.Node(package="map_server",
-                                    node_type="map_saver",
-                                    args=f"-f {map_path}")
-            process = launch.launch(node)
+    print("Opening the image in a new window...")
+    cv2.imshow("the_beacon", img) 
+    print(f"Saving the image to '{full_image_path}'...")
+    cv2.imwrite(str(full_image_path), img) 
+    print(f"Saved an image to '{full_image_path}'\n"
+        f"image dims = {img.shape[0]}x{img.shape[1]}px\n"
+        f"file size = {full_image_path.stat().st_size} bytes") 
+    print("Please close down the image pop-up window to continue...")
+    cv2.waitKey(0) 
 
 if __name__ == "__main__":
     node = Task5()
