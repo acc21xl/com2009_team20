@@ -180,6 +180,7 @@ class Task5:
 
             self.vel.linear.x = 0.13
             if self.m00 > self.m00_min:
+                print(self.m00)
                 #Make entire width in frame 
                 if self.pic_taken == False:
                     self.vel.linear.x = 0 
@@ -217,7 +218,7 @@ class Task5:
                 self.vel.angular.z = -0.8
             # Nowhere in front to go, does a 180 turn 
             elif (self.maxD_front < 0.65):
-                self.turn == "uTurn"
+                self.turn = "uTurn"
                 self.vel.linear.x = 0.018
                 self.vel.angular.z = math.pi/2
                 self.pub.publish(self.vel)
