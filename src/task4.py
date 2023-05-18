@@ -87,27 +87,9 @@ class Task4():
         self.vel = Twist()
         rospy.init_node(self.node_name, anonymous=True)
         self.rate = rospy.Rate(10)  # hz
-
-        self.lower_hsv = (0,0,100)
-        self.upper_hsv = (175,255,255)
         self.colour_faced = ""
 
-        if self.colour_arg[0] == "blue":
-            self.lower_hsv = (115, 50, 100)
-            self.upper_hsv = (160, 255, 255)
-        elif self.colour_arg[0] == "red":
-            self.lower_hsv = (0, 50, 100)
-            self.upper_hsv = (10, 255, 255)
-        elif self.colour_arg[0] == "yellow":
-            self.lower_hsv = (25,50,100)
-            self.upper_hsv = (40,255,255)
-        elif self.colour_arg[0] == "green":
-            self.lower_hsv = (50, 70, 100)
-            self.upper_hsv = (70, 255, 255)
-        else:
-            print("Invalid Colour Choice")
         
-        print(f"The Color Now Faced Is {self.colour_arg[0]}")
         # print(f"TASK 5 BEACON: The target is {self.colour_arg[0]}")
         
 
@@ -159,19 +141,49 @@ class Task4():
         crop_img = self.cv_img[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
         hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
 
+        colour_rgb = hsv_img[99,99]
+        if 115 <=colour_rgb[0] <= 160 and 50 <= colour_rgb[1] <= 255 and 100 <= colour_rgb[2] <= 255:
+            self.colour_faced = "blue"
+        elif 0 <= colour_rgb[0] <= 10 and 50 <= colour_rgb[1] <= 255 and 100 <= colour_rgb[2] <= 255:
+            self.colour_faced = "red"
+        elif 25 <= colour_rgb[0] <= 40 and 50 <= colour_rgb[1] <= 255 and 100 <= colour_rgb[2] <= 255:
+            self.colour_faced = "yellow"
+        elif 50 <= colour_rgb[0] <= 70 and 70 <= colour_rgb[1] <= 255 and 100 <= colour_rgb[2] <= 255:
+            self.colour_faced = "green"
+        else:
+            print(self.colour_faced)
+
+        print(f"The Color Now Faced Is {self.colour_faced}")
+
+        colour_arr = []
+        for i in range(10000):
+            if self.colour_faced == "blue" or self.colour_faced == "red" or self.colour_faced == "yellow" or self.colour_faced == "green":
+                colour_arr[i] = self.colour_faced
+
+        self.target = colour_arr[0]
+        print(self.target)
+        
+        if self.target == "blue":
+            self.lower_hsv = (115, 50, 100)
+            self.upper_hsv = (160, 255, 255)
+        elif self.target == "red":
+            self.lower_hsv = (0, 50, 100)
+            self.upper_hsv = (10, 255, 255)
+        elif self.target == "yellow":
+            self.lower_hsv = (25,50,100)
+            self.upper_hsv = (40,255,255)
+        elif self.target == "green":
+            self.lower_hsv = (50, 70, 100)
+            self.upper_hsv = (70, 255, 255)
+
         mask = cv2.inRange(hsv_img,self.lower_hsv, self.upper_hsv)
         res = cv2.bitwise_and(crop_img, crop_img, mask = mask)
 
         m = cv2.moments(mask)
         self.m00 = m['m00']
         self.cy = m['m10'] / (m['m00'] + 1e-5)
-
-        if self.lower_hsv == (50, 70, 100) and self.upper_hsv == (70, 255, 255):
-            self.colour_faced = "green"
-        else:
-            print("Invalid Colour")
         
-        print(f"The Color Now Faced Is {self.colour_faced}")
+        
 
         if self.m00 > self.m00_min:
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
@@ -245,7 +257,7 @@ class Task4():
                     current_yaw = 0.0
                     self.x0 = self.x
                     self.y0 = self.y
-                    print(f"SEARCH INITIATED: The target beacon colour is {self.colour_arg[0]}")
+                    print(f"SEARCH INITIATED: The target beacon colour is {self.target}")
                     self.target = self.colour_arg[0]
                     self.vel.angular.z = 0.0
 
@@ -296,4 +308,4 @@ if __name__ == "__main__":
     try:
         node.main_loop()
     except rospy.ROSInterruptException:
-        pass
+        pass                                                                                                                                                                                                                                                                                                                                                                                                                                             
