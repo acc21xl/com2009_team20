@@ -25,15 +25,14 @@ class Task5:
         self.map_path = Path.home().joinpath("catkin_ws/src/com2009_team20/maps/task5_map")
         # How node takes arguments for which colour to look for
         cli = argparse.ArgumentParser(description=f"Command-line interface for the '{self.node_name}' node.")
-        cli.add_argument("colour", metavar="COL", default="Black",help="The name of a colour(Blue/Red/Yellow?Green)"
+        cli.add_argument("target_colour", metavar="COL", default="Black",help="The name of a colour(Blue/Red/Yellow?Green)"
         )
 
         args, self.colour_arg = cli.parse_known_args(rospy.myargv()[1:])
         rospy.init_node('task5',anonymous=True)
 
         # Subscriber node for taking picture of beacon
-        self.camera_subscriber = rospy.Subscriber("/camera/rgb/image_raw",
-            Image, self.camera_callback)
+        self.camera_subscriber = rospy.Subscriber("/camera/color/image_raw", Image, self.camera_callback)
         self.cvbridge_interface = CvBridge()
         
         # Subscriber node for getting scan data and odom data
@@ -52,17 +51,17 @@ class Task5:
 
         #These work for simulation need to check on real robots
         if self.colour_arg[0] == "blue":
-            self.lower_hsv = (115, 50, 100)
-            self.upper_hsv = (160, 255, 255)
+            self.lower_hsv = (105, 50, 100)
+            self.upper_hsv = (125, 100, 255)
         elif self.colour_arg[0] == "red":
-            self.lower_hsv = (0, 50, 100)
-            self.upper_hsv = (10, 255, 255)
+            self.lower_hsv = (150, 50, 100)
+            self.upper_hsv = (175, 225, 255)
         elif self.colour_arg[0] == "yellow":
-            self.lower_hsv = (25,50,100)
-            self.upper_hsv = (40,255,255)
+            self.lower_hsv = (10,50,100)
+            self.upper_hsv = (20,255,255)
         elif self.colour_arg[0] == "green":
-            self.lower_hsv = (50, 70, 100)
-            self.upper_hsv = (70, 255, 255)
+            self.lower_hsv = (87, 100, 100)
+            self.upper_hsv = (100, 255, 255)
         else:
             print("Invalid Colour Choice")
         print(f"TASK 5 BEACON: The target is {self.colour_arg[0]}")
@@ -96,12 +95,14 @@ class Task5:
             self.cv_img = self.cvbridge_interface.imgmsg_to_cv2(img_data, desired_encoding="bgr8")
         except CvBridgeError as e:
             print(e)
+            print("____________________________________________________________________")
         
         height, width, _ = self.cv_img.shape
-        crop_width = width - 800
+        crop_width = width -48
+
         # Set to 100 so it doesn't detect pillars over walls or
         # colours on the floor
-        crop_height = 50
+        crop_height = 80
         crop_x = int((width/2) - (crop_width/2))
         crop_y = int((height/2) - (crop_height/2))
 
@@ -117,7 +118,6 @@ class Task5:
 
         if self.m00 > self.m00_min:
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
-        
         cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
 
@@ -181,6 +181,7 @@ class Task5:
             self.vel.linear.x = 0.13
             if self.m00 > self.m00_min:
                 print(self.m00)
+                print("--------------------------------------------------------------------")
                 #Make entire width in frame 
                 if self.pic_taken == False:
                     self.vel.linear.x = 0 
@@ -202,20 +203,30 @@ class Task5:
     
             # Reused from task 3 -----
             # Room to move left so follow it 
+            if self.counter > 30:
+                print(f"min_distF{self.minD_front:.5f}, min_distR{self.minD_right:.5f}, min_distL{self.minD_left:.5f}")
+    
+            if (self.minD_left == 0):
+                self.minD_left = 10
+            if (self.minD_right == 0):
+                self.minD_right = 10
+            if (self.minD_front == 0):
+                self.minD_front = 10
+
             if (self.minD_left > 0.4) and (self.minD_front > 0.5):
                 self.turn = "left"
-                self.vel.linear.x = 0.24
-                self.vel.angular.z = 0.8
+                self.vel.linear.x = 0.08
+                self.vel.angular.z = 0.3
             # Can't go left, but can follow left wall forward
             elif (self.minD_front > 0.5) and (self.minD_left > 0.3) and (self.minD_left < 0.4):
                 self.turn = "forward"
-                self.vel.linear.x = 0.24
-                self.vel.angular.z = 0.2
+                self.vel.linear.x = 0.08
+                self.vel.angular.z = 0.1
             # Can't go left or forward, but can go right
             elif (self.minD_left < 0.3) and (self.minD_front > 0.5):
                 self.turn = "right"
-                self.vel.linear.x = 0.24
-                self.vel.angular.z = -0.8
+                self.vel.linear.x = 0.08
+                self.vel.angular.z = -0.3
             # Nowhere in front to go, does a 180 turn 
             elif (self.maxD_front < 0.65):
                 self.turn = "uTurn"
@@ -230,11 +241,12 @@ class Task5:
                 self.vel.angular.z = 0
                 self.pub.publish(self.vel)
                 #Spins in the direction with most space to move
-                if (self.minD_left > self.minD_right):
-                    self.vel.angular.z = 1.2
-                elif (self.minD_left < self.minD_right):
-                    self.vel.angular.z = -1.2
-            self.pub.publish(self.vel)        
+                self.vel.angular.z = -0.7
+            self.pub.publish(self.vel) 
+            if self.counter > 30:   
+                print(self.turn)
+                print(f"min_distF{self.minD_front:.5f}, min_distR{self.minD_right:.5f}, min_distL{self.minD_left:.5f}")
+                self.counter = 0
         rate.sleep()    
 
 def show_and_save_image(img, base_image_path): 
