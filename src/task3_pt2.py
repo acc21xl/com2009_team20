@@ -1,15 +1,19 @@
 #!/usr/bin/env python3 
 
+#Need Lidar
 import rospy
 import math
 import numpy as np
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
+from tf.transformations import euler_from_quaternion
 from sensor_msgs.msg import LaserScan
 
-class Task3:
+class Task3_pt2:
     def __init__(self):
         rospy.init_node('task3_pt2', anonymous=True)
-        self.sub_scan = rospy.Subscriber("/scan", LaserScan, self.scan_callback)
+        self.subScan = rospy.Subscriber("/scan", LaserScan, self.scan_callback)
+        rospy.Subscriber('/odom', Odometry, self.odometry_callback)
         self.pub = rospy.Publisher("cmd_vel", Twist, queue_size=10)
         self.vel = Twist()
 
@@ -19,7 +23,6 @@ class Task3:
         self.minD_front = 0
         self.maxD_front = 0 
         self.counter = 0
-
         self.ctrl_c = False
         rospy.on_shutdown(self.shutdownhook)
 
@@ -28,6 +31,7 @@ class Task3:
         self.ctrl_c = True
 
     def scan_callback(self,scan_data):
+
         # Take measurements of distance from left wall (left side traversal method)
         # Needs to maintain that distance within 0.1m
 
@@ -55,36 +59,60 @@ class Task3:
         wide_front_arc = np.array(wide_front_left[::-1] + wide_front_right[::-1])
         self.maxD_front = wide_front_arc.max()
 
-        #Remove before submit
-        #self.minInfo = f"Front: '{self.minD_front:.2f}',  Left: '{self.minD_left:.2f}', Right: '{self.minD_right:.2f}', maxFront '{self.maxD_front:.2f}'"
+        self.minInfo = f"Front: '{self.minD_front:.2f}',  Left: '{self.minD_left:.2f}', Right: '{self.minD_right:.2f}', maxFront '{self.maxD_front:.2f}'"
+
+    def odometry_callback(self,odom):
+        pose = odom.pose.pose
+        orientation = pose.orientation
+
+        curr_x = pose.position.x
+        curr_y = pose.position.y
+        curr_z = pose.position.z
+
+        (roll, pitch, yaw) = euler_from_quaternion([curr_x, 
+                     curr_y, curr_z, orientation.w], 
+                     'sxyz')
+
+        # *** Take out before submitting ***
+        if self.counter > 25:
+            self.counter = 0
+            print(f"'{self.minInfo}'")
+            print(f"he is turning'{self.turn}'")
+        else:
+            self.counter += 1
 
     def main_loop(self):
         rate = rospy.Rate(30)
         while not self.ctrl_c:
             # Room to move left so follow it 
             if (self.minD_left > 0.4) and (self.minD_front > 0.5):
+                self.turn = "left"
                 self.vel.linear.x = 0.26
                 self.vel.angular.z = 1
             # Can't go left, but can follow left wall forward
             elif (self.minD_front > 0.5) and (self.minD_left > 0.3) and (self.minD_left < 0.4):
+                self.turn = "forward"
                 self.vel.linear.x = 0.26
                 self.vel.angular.z = 0.1
             # Can't go left or forward, but can go right
             elif (self.minD_left < 0.3) and (self.minD_front > 0.5):
+                self.turn = "right"
                 self.vel.linear.x = 0.26
                 self.vel.angular.z = -0.6
             # Nowhere in front to go, does a 180 turn 
             elif (self.maxD_front < 0.65):
+                self.turn == "uTurn"
                 self.vel.linear.x = 0.018
                 self.vel.angular.z = math.pi/2
                 self.pub.publish(self.vel)
                 rospy.sleep(2)
             # If not, must be wall directly ahead
             else:
+                self.turn = "Stop, wall ahead"
                 self.vel.linear.x = 0
                 self.vel.angular.z = 0
                 self.pub.publish(self.vel)
-                # Spins in the direction with most space to move
+                #Spins in the direction with most space to move
                 if (self.minD_left > self.minD_right):
                     self.vel.angular.z = 1.5
                 elif (self.minD_left < self.minD_right):
@@ -93,8 +121,11 @@ class Task3:
         rate.sleep()
             
 if __name__ == "__main__":
-    node = Task3()
+    node = Task3_pt2()
     try:
         node.main_loop()
     except rospy.ROSInterruptException:
         pass
+
+        
+        

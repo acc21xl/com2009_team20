@@ -4,6 +4,8 @@ from turtle import right
 import rospy
 import numpy as np
 import math
+from pathlib import Path 
+import roslaunch
 
 # For creating images
 import cv2
@@ -20,14 +22,13 @@ from sensor_msgs.msg import LaserScan
 class Task5:
     def __init__(self):
         self.node_name ="task5"
-
+        self.map_path = Path.home().joinpath("catkin_ws/src/com2009_team20/maps/task5_map")
         # How node takes arguments for which colour to look for
         cli = argparse.ArgumentParser(description=f"Command-line interface for the '{self.node_name}' node.")
         cli.add_argument("colour", metavar="COL", default="Black",help="The name of a colour(Blue/Red/Yellow?Green)"
         )
 
         args, self.colour_arg = cli.parse_known_args(rospy.myargv()[1:])
-
         rospy.init_node('task5',anonymous=True)
 
         # Subscriber node for taking picture of beacon
@@ -43,14 +44,47 @@ class Task5:
         self.pub = rospy.Publisher("cmd_vel", Twist, queue_size=10)
         self.vel = Twist()
 
+        # Default values set incase colour_arg isn't right 
+        # (Hue, Sat, Val)
+        self.lower_hsv = (0,0,100)
+        self.upper_hsv = (175,255,255)
+        rospy.on_shutdown(self.shutdownhook)
+
+        #These work for simulation need to check on real robots
+        if self.colour_arg[0] == "blue":
+            self.lower_hsv = (115, 50, 100)
+            self.upper_hsv = (160, 255, 255)
+        elif self.colour_arg[0] == "red":
+            self.lower_hsv = (0, 50, 100)
+            self.upper_hsv = (10, 255, 255)
+        elif self.colour_arg[0] == "yellow":
+            self.lower_hsv = (25,50,100)
+            self.upper_hsv = (40,255,255)
+        elif self.colour_arg[0] == "green":
+            self.lower_hsv = (50, 70, 100)
+            self.upper_hsv = (70, 255, 255)
+        else:
+            print("Invalid Colour Choice")
+        print(f"TASK 5 BEACON: The target is {self.colour_arg[0]}")
+
         # Initialises class variables
         self.turn = "No"
+        self.minD_left = 0 
+        self.minD_right = 0 
+        self.minD_front = 0 
+        self.maxD_front = 0
         self.ctrl_c = False
         self.counter = 0
         self.m00 = 0
         self.m00_min = 10000
-
-        rospy.on_shutdown(self.shutdownhook)
+        self.spin_counter = 0
+        self.base_image_path = Path.home().joinpath("catkin_ws/src/com2009_team20/snaps/")
+        print(self.base_image_path)
+        self.base_image_path.mkdir(parents=True, exist_ok=True) 
+        self.pic_taken = False
+        self.launch = roslaunch.scriptapi.ROSLaunch()
+        self.launch.start()
+        
 
     def shutdownhook(self):
         self.pub.publish(Twist())
@@ -59,43 +93,22 @@ class Task5:
 
     def camera_callback(self, img_data):
         try:
-            cv_img = self.cvbridge_interface.imgmsg_to_cv2(img_data, desired_encoding="bgr8")
+            self.cv_img = self.cvbridge_interface.imgmsg_to_cv2(img_data, desired_encoding="bgr8")
         except CvBridgeError as e:
             print(e)
         
-        height, width, _ = cv_img.shape
+        height, width, _ = self.cv_img.shape
         crop_width = width - 800
         # Set to 100 so it doesn't detect pillars over walls or
         # colours on the floor
-        crop_height = 100
+        crop_height = 50
         crop_x = int((width/2) - (crop_width/2))
         crop_y = int((height/2) - (crop_height/2))
 
-        crop_img = cv_img[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
+        crop_img = self.cv_img[crop_y+20:crop_y+crop_height+20, crop_x:crop_x+crop_width]
         hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
 
-        # Default values set incase colour_arg isn't right 
-        # (Hue, Sat, Val)
-        lower_hsv = (0,0,100)
-        upper_hsv = (175,255,255)
-
-        #These work for simulation need to check on real robots
-        if self.colour_arg == "Blue":
-            lower_hsv = (115, 50, 100)
-            upper_hsv = (160, 255, 255)
-        elif self.colour_arg == "Red":
-            lower_hsv = (0, 50, 100)
-            upper_hsv = (10, 255, 255)
-        elif self.colour_arg == "Yellow":
-            lower_hsv = (25,50,100)
-            upper_hsv = (40,255,255)
-        elif self.colour_arg == "Green":
-            lower_hsv = (50, 70, 100)
-            upper_hsv = (70, 255, 255)
-        else:
-            print("invalid colour given")
-
-        mask = cv2.inRange(hsv_img,lower_hsv, upper_hsv)
+        mask = cv2.inRange(hsv_img,self.lower_hsv, self.upper_hsv)
         res = cv2.bitwise_and(crop_img, crop_img, mask = mask)
 
         m = cv2.moments(mask)
@@ -110,51 +123,30 @@ class Task5:
 
     def scan_callback(self,scan_data):
 
-        # Front Left
-        left_view = scan_data.ranges[40:70]
+        # Re-used movement code from Task 3 ----  
+         # Front left side view
+        left_view = scan_data.ranges[30:60]
         left_array = np.array(left_view)
         self.minD_left = left_array.min()
+
         self.minA_left = left_array.argmin()
 
-        # Front Right
-        right_view = scan_data.ranges[290:320]
+        # Front right side view
+        right_view = scan_data.ranges[300:330]
         right_array = np.array(right_view)
         self.minD_right = right_array.min()
-        self.minA_right = right_array.argmin()
 
-        #Directly in front
-        left_arc = scan_data.ranges[0:31]
-        right_arc = scan_data.ranges[-30:]
+        # Front 30 degree view, for not hitting walls
+        left_arc = scan_data.ranges[0:21]
+        right_arc = scan_data.ranges[-20:]
         front_arc = np.array(left_arc[::-1] + right_arc[::-1])
         self.minD_front = front_arc.min()
-        maxD_front = front_arc.max()
 
-        #If blob is detected
-        # Enter a while loop 
-        #   Move towards it until it fills a certain height/width
-        #   Follow normal movement rules, avoiding walls etc
-        #   
-        if self.m00 > self.m00_min:
-            print("Blob Detected")
-
-        # Going to hit front wall
-        if (self.minD_front < 0.25):
-            self.turn = "noCrash"
-        # Going to hit right wall
-        elif (self.minD_right < 0.3):
-            self.turn = "Left"
-        # Going to hit left wall
-        elif (self.minD_left < 0.3):
-            self.turn = "Right"
-        # Space to go left, left traversal so follows 
-        elif (self.minD_left > 0.35):
-            self.turn = "Left"
-        # Cant go left and cant go forward
-        elif (self.minD_front < 0.3):
-            self.turn = "Right"
-        # No immediate issue so keeps going forward
-        else:
-            self.turn = "No"
+        # For seeing if a U-Turn is needed 
+        wide_front_left = scan_data.ranges[0:91]
+        wide_front_right = scan_data.ranges[-90:]
+        wide_front_arc = np.array(wide_front_left[::-1] + wide_front_right[::-1])
+        self.maxD_front = wide_front_arc.max()
 
         self.minInfo = f"Front: '{self.minD_front:.2f}', Left: '{self.minD_left:.2f}', Right: '{self.minD_right:.2f}'"
 
@@ -169,34 +161,95 @@ class Task5:
         (roll, pitch, yaw) = euler_from_quaternion([curr_x, 
                      curr_y, curr_z, orientation.w], 
                      'sxyz')
+        #remove before submit
+        self.counter += 1
 
-        if self.counter > 25:
-            self.counter = 0
-            print(f"'{self.minInfo}'")
-            print(f"he is turning'{self.turn}'")
-        else:
-            self.counter += 1
+
 
     def main_loop(self):
-        print(self.colour_arg)
-        rate = rospy.Rate(40)
+        rate = rospy.Rate(30)
         while not self.ctrl_c:
+            # How often updates + saves map, also does a spin to look for stuff
+            if self.counter > 300:
+                print(f"Saving map at time: {rospy.get_time()}...")
+                node = roslaunch.core.Node(package="map_server",
+                           node_type="map_saver",
+                           args=f"-f {self.map_path}")
+                self.launch.launch(node)
+                self.counter = 0 
+
             self.vel.linear.x = 0.13
-            
-            if self.turn == "noCrash":
-                self.vel.linear.x = -0.1
+            if self.m00 > self.m00_min:
+                print(self.m00)
+                #Make entire width in frame 
+                if self.pic_taken == False:
+                    self.vel.linear.x = 0 
+                    self.vel.angular.z = 0
+                    self.pub.publish(self.vel)
+                    while (self.pic_taken == False):
+                        print("_______________TAking photo__________________")
+                        print(self.cy)
+                        if self.cy > 450 and self.cy < 650:
+                            print(self.pic_taken)
+                            self.pic_taken = True
+                            show_and_save_image(self.cv_img, self.base_image_path)
+                        else : 
+                            if self.cy < 450:
+                                self.vel.angular.z = 0.5
+                            elif self.cy > 650 :
+                                self.vel.angular.z = -0.5
+                            self.pub.publish(self.vel)
+    
+            # Reused from task 3 -----
+            # Room to move left so follow it 
+            if (self.minD_left > 0.4) and (self.minD_front > 0.5):
+                self.turn = "left"
+                self.vel.linear.x = 0.24
+                self.vel.angular.z = 0.8
+            # Can't go left, but can follow left wall forward
+            elif (self.minD_front > 0.5) and (self.minD_left > 0.3) and (self.minD_left < 0.4):
+                self.turn = "forward"
+                self.vel.linear.x = 0.24
+                self.vel.angular.z = 0.2
+            # Can't go left or forward, but can go right
+            elif (self.minD_left < 0.3) and (self.minD_front > 0.5):
+                self.turn = "right"
+                self.vel.linear.x = 0.24
+                self.vel.angular.z = -0.8
+            # Nowhere in front to go, does a 180 turn 
+            elif (self.maxD_front < 0.65):
+                self.turn = "uTurn"
+                self.vel.linear.x = 0.018
+                self.vel.angular.z = math.pi/2
+                self.pub.publish(self.vel)
+                rospy.sleep(2)
+            # If not, must be wall directly ahead
+            else:
+                self.turn = "Stop, wall ahead"
+                self.vel.linear.x = 0
                 self.vel.angular.z = 0
                 self.pub.publish(self.vel)
-                rospy.sleep(1)
-            elif self.turn == "Left":
-                self.vel.angular.z = 0.8
-            elif self.turn == "Right":
-                self.vel.angular.z = -0.8
-            else:
-                self.vel.angular.z = 0 
-                self.vel.linear.x = 0.15
-            self.pub.publish(self.vel)
-            rate.sleep()
+                #Spins in the direction with most space to move
+                if (self.minD_left > self.minD_right):
+                    self.vel.angular.z = 1.2
+                elif (self.minD_left < self.minD_right):
+                    self.vel.angular.z = -1.2
+            self.pub.publish(self.vel)        
+        rate.sleep()    
+
+def show_and_save_image(img, base_image_path): 
+    full_image_path = base_image_path.joinpath("the_beacon.jpg")
+    print(full_image_path)
+    #print("Opening the image in a new window...")
+    #cv2.imshow("the_beacon", img) 
+    print(f"Saving the image to '{full_image_path}'...")
+    cv2.imwrite(str(full_image_path), img) 
+    print(f"Saved an image to '{full_image_path}'\n"
+        f"image dims = {img.shape[0]}x{img.shape[1]}px\n"
+        f"file size = {full_image_path.stat().st_size} bytes") 
+    print("Please close down the image pop-up window to continue...")
+    #cv2.waitKey(0) 
+    print("continue")
 
 if __name__ == "__main__":
     node = Task5()
